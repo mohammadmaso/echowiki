@@ -1,0 +1,49 @@
+name: Release Obsidian plugin
+
+on:
+  push:
+    tags:
+      - '*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Build Mastra server
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build Obsidian plugin
+        run: |
+          cd obsidian-plugin
+          npm ci
+          npm run build:mastra-server
+          npm run build
+
+      - name: Package Mastra server archive
+        run: |
+          find obsidian-plugin/mastra-server -type f \( -name '*.db' -o -name '*.db-*' -o -name '*.duckdb' -o -name '*.duckdb.*' \) -delete
+          tar -czf mastra-server.tar.gz -C obsidian-plugin mastra-server
+
+      - name: Create release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${GITHUB_REF#refs/tags/}"
+          gh release create "$tag" \
+            --title="$tag" \
+            --generate-notes \
+            obsidian-plugin/main.js \
+            manifest.json \
+            obsidian-plugin/styles.css \
+            mastra-server.tar.gz

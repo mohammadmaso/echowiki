@@ -4,7 +4,25 @@ Local-first LLM knowledge compiler for Obsidian. Drop notes or record voice into
 
 Repository: [github.com/mohammadmaso/echowiki](https://github.com/mohammadmaso/echowiki)
 
-## Quick start (Obsidian vault)
+## Install from Obsidian Community Plugins
+
+Once published, install EchoWiki from any vault:
+
+1. **Settings → Community plugins → Browse** → search **EchoWiki** → Install → Enable.
+2. Requires **Node.js ≥ 22.13** on your PATH (or set a custom path in plugin settings).
+3. On first enable, the plugin downloads the bundled Mastra compiler backend (~180 MB, one time) from [GitHub Releases](https://github.com/mohammadmaso/echowiki/releases).
+4. Open **Settings → EchoWiki**, add your LLM and STT API keys, then use the commands below.
+
+EchoWiki creates `raw/` and `wiki/` folders in your vault automatically. You do **not** need to clone this repo unless you are developing EchoWiki itself.
+
+### Publish / update the Community listing (maintainers)
+
+1. Bump `version` in root `manifest.json` and `obsidian-plugin/manifest.json` (keep them identical).
+2. Commit and push to `main`.
+3. Create and push a matching git tag (example: `0.1.0`). GitHub Actions builds `main.js`, `manifest.json`, `styles.css`, and `mastra-server.tar.gz`.
+4. Submit or update at [community.obsidian.md](https://community.obsidian.md) → **Plugins → New plugin** (first time only) with repo URL `https://github.com/mohammadmaso/echowiki`.
+
+## Quick start (developer vault)
 
 EchoWiki is designed so the **repo root is your Obsidian vault**. Your personal notes (`raw/`, `wiki/`) stay local and are not committed to git.
 

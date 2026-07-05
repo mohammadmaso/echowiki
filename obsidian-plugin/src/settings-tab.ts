@@ -1,5 +1,6 @@
 import { App, Notice, PluginSettingTab, Setting } from 'obsidian';
 import type EchoWikiPlugin from './main';
+import { isMastraServerInstalled } from './mastra-server-bootstrap';
 import { testSttConnection } from './stt-client';
 
 export class EchoWikiSettingTab extends PluginSettingTab {
@@ -143,6 +144,22 @@ export class EchoWikiSettingTab extends PluginSettingTab {
         text.setValue(this.plugin.settings.sttModel).onChange(async (value) => {
           this.plugin.settings.sttModel = value.trim() || 'whisper-1';
           await this.plugin.saveSettings();
+        }),
+      );
+
+    containerEl.createEl('h3', { text: 'Server' });
+
+    const backendInstalled = isMastraServerInstalled(this.plugin.getPluginDir());
+    new Setting(containerEl)
+      .setName('Compiler backend')
+      .setDesc(
+        backendInstalled
+          ? 'Bundled Mastra server is installed in the plugin folder.'
+          : 'Required on first install from Community Plugins. Downloads ~180 MB once from GitHub releases.',
+      )
+      .addButton((button) =>
+        button.setButtonText(backendInstalled ? 'Reinstall backend' : 'Install backend').onClick(() => {
+          void this.plugin.installCompilerBackend(backendInstalled);
         }),
       );
 
