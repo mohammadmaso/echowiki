@@ -11,7 +11,7 @@ export class EchoWikiSettingTab extends PluginSettingTab {
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
-    new Setting(containerEl).setName('EchoWiki settings').setHeading();
+    new Setting(containerEl).setName('General').setHeading();
 
     new Setting(containerEl)
       .setName('Node.js path')
