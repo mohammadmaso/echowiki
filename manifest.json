@@ -1,7 +1,7 @@
 {
   "id": "echowiki",
   "name": "EchoWiki",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "minAppVersion": "1.5.0",
   "description": "Compile raw notes and voice transcripts into a structured, interlinked wiki using a local LLM agent.",
   "author": "mohammadmaso",
