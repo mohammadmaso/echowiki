@@ -11,7 +11,7 @@ export class EchoWikiSettingTab extends PluginSettingTab {
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl('h2', { text: 'EchoWiki settings' });
+    new Setting(containerEl).setName('EchoWiki settings').setHeading();
 
     new Setting(containerEl)
       .setName('Node.js path')
@@ -76,7 +76,7 @@ export class EchoWikiSettingTab extends PluginSettingTab {
         }),
       );
 
-    containerEl.createEl('h3', { text: 'LLM (Mastra server)' });
+    new Setting(containerEl).setName('LLM (Mastra server)').setHeading();
 
     new Setting(containerEl)
       .setName('LLM base URL')
@@ -117,7 +117,7 @@ export class EchoWikiSettingTab extends PluginSettingTab {
         }),
       );
 
-    containerEl.createEl('h3', { text: 'Speech-to-text' });
+    new Setting(containerEl).setName('Speech-to-text').setHeading();
 
     new Setting(containerEl)
       .setName('STT base URL')
@@ -147,7 +147,7 @@ export class EchoWikiSettingTab extends PluginSettingTab {
         }),
       );
 
-    containerEl.createEl('h3', { text: 'Server' });
+    new Setting(containerEl).setName('Server').setHeading();
 
     const backendInstalled = isMastraServerInstalled(this.plugin.getPluginDir());
     new Setting(containerEl)
