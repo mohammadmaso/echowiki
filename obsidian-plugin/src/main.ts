@@ -42,7 +42,7 @@ export default class EchoWikiPlugin extends Plugin {
     await this.loadSettings();
     await this.ensureVaultFolders();
 
-    this.statusBarItem = Platform.isMobileApp() ? null : this.addStatusBarItem();
+    this.statusBarItem = Platform.isMobile ? null : this.addStatusBarItem();
     this.updateStatusBar('ready');
 
     this.rawWatcher = new RawWatcher(this.app, this);
