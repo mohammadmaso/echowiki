@@ -1,0 +1,17 @@
+{
+  "name": "obsidian-plugin-echowiki",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build:mastra-server": "node scripts/copy-mastra-server.mjs",
+    "build": "node esbuild.config.mjs production",
+    "dev": "node esbuild.config.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "builtin-modules": "^4.0.0",
+    "esbuild": "^0.25.0",
+    "obsidian": "latest",
+    "typescript": "^5.8.2"
+  }
+}

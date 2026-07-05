@@ -1,0 +1,30 @@
+.echowiki-voice-modal .echowiki-status {
+  margin: 1em 0;
+  font-weight: 600;
+}
+
+.echowiki-voice-modal .echowiki-timer {
+  font-size: 1.5em;
+  margin: 0.5em 0;
+}
+
+.echowiki-approval-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75em;
+  padding: 0.5em 0;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.echowiki-approval-item:last-child {
+  border-bottom: none;
+}
+
+.echowiki-status-bar-error {
+  color: var(--text-error);
+}
+
+.echowiki-status-bar-ready {
+  color: var(--text-success);
+}

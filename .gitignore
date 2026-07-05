@@ -1,0 +1,24 @@
+output.txt
+node_modules
+dist
+.mastra
+.env.development
+.env
+*.db
+*.db-*
+.netlify
+.vercel
+*.duckdb
+*.duckdb.wal
+obsidian-plugin/mastra-server/
+obsidian-plugin/main.js
+obsidian-plugin/node_modules/
+
+# Personal vault content (local-first; not versioned)
+/raw/
+/wiki/
+
+# Obsidian vault settings and plugin data (may contain API keys)
+.obsidian/
+
+.DS_Store

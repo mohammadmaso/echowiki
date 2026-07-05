@@ -1,0 +1,9 @@
+{
+  "id": "echowiki",
+  "name": "EchoWiki",
+  "version": "0.1.0",
+  "minAppVersion": "1.5.0",
+  "description": "Compile raw notes and voice transcripts into a structured wiki using a bundled Mastra agent.",
+  "author": "EchoWiki",
+  "isDesktopOnly": true
+}
