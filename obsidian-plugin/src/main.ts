@@ -1,6 +1,4 @@
-import { join } from 'node:path';
 import {
-  FileSystemAdapter,
   Notice,
   Plugin,
   TFile,
@@ -8,6 +6,7 @@ import {
 } from 'obsidian';
 import { ApprovalModal } from './approval-modal';
 import { runCompileDocument } from './compiler-client';
+import { createVaultWikiStorage } from './vault-storage';
 import { RawWatcher } from './raw-watcher';
 import {
   DEFAULT_PLUGIN_DATA,
@@ -86,14 +85,6 @@ export default class EchoWikiPlugin extends Plugin {
   async onunload(): Promise<void> {
     this.rawWatcher?.detach();
     this.statusBarItem?.remove();
-  }
-
-  getVaultRoot(): string {
-    const adapter = this.app.vault.adapter;
-    if (adapter instanceof FileSystemAdapter) {
-      return adapter.getBasePath();
-    }
-    throw new Error('EchoWiki requires the desktop app with a local vault folder.');
   }
 
   async loadSettings(): Promise<void> {
@@ -219,12 +210,16 @@ export default class EchoWikiPlugin extends Plugin {
         throw new Error('LLM model is not set. Open EchoWiki settings and choose a model.');
       }
 
-      const sourcePath = join(this.getVaultRoot(), vaultRelativePath);
+      const file = this.app.vault.getAbstractFileByPath(normalizePath(vaultRelativePath));
+      if (!(file instanceof TFile)) {
+        throw new Error(`Raw file not found: ${vaultRelativePath}`);
+      }
+      const sourceContent = await this.app.vault.read(file);
       const docName = docNameFromPath(vaultRelativePath);
       await runCompileDocument({
         docName,
-        sourcePath,
-        kbDir: this.getVaultRoot(),
+        sourceContent,
+        storage: createVaultWikiStorage(this.app, this.settings.wikiFolder),
         llmModel: this.settings.llmModel.trim(),
         llmApiKey: this.settings.llmApiKey.trim(),
         llmBaseUrl: this.settings.llmBaseUrl.trim() || undefined,

@@ -1,5 +1,5 @@
-import fs from 'node:fs';
-import path from 'node:path';
+import type { WikiStorage } from '../storage/types.js';
+import { joinWikiPath } from '../storage/types.js';
 
 const WIKILINK_RE = /\[\[([^\]]+)\]\]/g;
 
@@ -18,20 +18,17 @@ export function buildNormIndex(knownTargets: Set<string>): Map<string, string> {
   return index;
 }
 
-export function listExistingWikiTargets(wikiDir: string): Set<string> {
+export async function listExistingWikiTargets(storage: WikiStorage): Promise<Set<string>> {
   const targets = new Set<string>();
   for (const subdir of ['concepts', 'summaries', 'entities'] as const) {
-    const dir = path.join(wikiDir, subdir);
-    if (!fs.existsSync(dir)) {
-      continue;
-    }
-    for (const name of fs.readdirSync(dir)) {
+    const names = await storage.list(subdir);
+    for (const name of names) {
       if (name.endsWith('.md')) {
         targets.add(`${subdir}/${name.slice(0, -3)}`);
       }
     }
   }
-  if (fs.existsSync(path.join(wikiDir, 'index.md'))) {
+  if (await storage.exists('index.md')) {
     targets.add('index');
   }
   return targets;
@@ -74,4 +71,12 @@ export function sanitizeSlug(name: string): string {
   const normalized = name.normalize('NFKC');
   const sanitized = normalized.replace(/[^\w-]/g, '-').replace(/^-+|-+$/g, '');
   return sanitized || 'unnamed-concept';
+}
+
+export function conceptPath(slug: string): string {
+  return joinWikiPath('concepts', `${slug}.md`);
+}
+
+export function entityPath(slug: string): string {
+  return joinWikiPath('entities', `${slug}.md`);
 }

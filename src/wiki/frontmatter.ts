@@ -1,5 +1,4 @@
-import fs from 'node:fs';
-import path from 'node:path';
+import type { WikiStorage } from '../storage/types.js';
 
 export function split(text: string): { frontmatter: string; body: string } | null {
   if (!text.startsWith('---\n')) {
@@ -84,10 +83,10 @@ export function setLine(frontmatter: string, key: string, value: string): string
   return next.join('\n');
 }
 
-export function atomicWriteText(filePath: string, content: string): void {
-  const dir = path.dirname(filePath);
-  fs.mkdirSync(dir, { recursive: true });
-  const tmp = `${filePath}.tmp.${process.pid}`;
-  fs.writeFileSync(tmp, content, 'utf-8');
-  fs.renameSync(tmp, filePath);
+export async function atomicWriteText(
+  storage: WikiStorage,
+  relativePath: string,
+  content: string,
+): Promise<void> {
+  await storage.writeText(relativePath, content);
 }

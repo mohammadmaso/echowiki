@@ -1,5 +1,8 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { compileDocument } from '../compiler-api.js';
+import { loadConfig, resolvePaths } from '../config.js';
+import { createNodeWikiStorage } from '../storage/node-storage.js';
 import { docNameFromPath } from '../utils.js';
 
 function printUsage(): void {
@@ -18,8 +21,13 @@ async function main(): Promise<void> {
   const kbDir = kbDirIndex >= 0 ? args[kbDirIndex + 1] : process.cwd();
   const sourcePath = path.resolve(kbDir, fileArg);
   const docName = docNameFromPath(path.basename(sourcePath));
+  const sourceContent = fs.readFileSync(sourcePath, 'utf-8');
+  const { wikiDir } = resolvePaths(loadConfig({ kbDir }));
 
-  await compileDocument(docName, sourcePath, { kbDir });
+  await compileDocument(docName, sourceContent, {
+    kbDir,
+    storage: createNodeWikiStorage(wikiDir),
+  });
   console.log(`Compiled ${docName}`);
 }
 

@@ -1,8 +1,7 @@
-import fs from 'node:fs';
-import path from 'node:path';
 import type { LlmClient } from '../llm/client.js';
 import type { EchoWikiConfig } from '../config.js';
-import { loadConfig, resolvePaths } from '../config.js';
+import { loadConfig } from '../config.js';
+import type { WikiStorage } from '../storage/types.js';
 import { readConceptBriefs, readEntityBriefs } from './briefs.js';
 import * as frontmatter from './frontmatter.js';
 import { appendLog, updateIndex } from './index-writer.js';
@@ -39,11 +38,12 @@ import {
   SYSTEM_TEMPLATE,
 } from './prompts.js';
 import { getAgentsMd } from './schema.js';
-import { listExistingWikiTargets, sanitizeSlug, stripGhostWikilinks } from './wikilink.js';
+import { conceptPath, entityPath, listExistingWikiTargets, sanitizeSlug, stripGhostWikilinks } from './wikilink.js';
 
 export interface CompileShortDocOptions {
   docName: string;
-  sourcePath: string;
+  sourceContent: string;
+  storage: WikiStorage;
   config?: Partial<EchoWikiConfig>;
   maxConcurrency?: number;
 }
@@ -71,7 +71,7 @@ function buildDocMessage(docName: string, content: string): LlmMessage {
 
 async function compileConcepts(
   client: LlmClient,
-  wikiDir: string,
+  storage: WikiStorage,
   systemMsg: LlmMessage,
   docMsg: LlmMessage,
   summary: string,
@@ -89,8 +89,8 @@ async function compileConcepts(
   const typesStr = entityTypes.join(', ');
   const validTypes = new Set(entityTypes);
 
-  const conceptBriefs = readConceptBriefs(wikiDir);
-  const entityBriefs = readEntityBriefs(wikiDir);
+  const conceptBriefs = await readConceptBriefs(storage);
+  const entityBriefs = await readEntityBriefs(storage);
   const summaryMsg: LlmMessage = { role: 'assistant', content: summary };
 
   const planRaw = await llmCall(
@@ -111,11 +111,11 @@ async function compileConcepts(
     'concepts-plan',
   );
 
-  const writeFallbackSummary = () => {
-    const fallbackTargets = listExistingWikiTargets(wikiDir);
+  const writeFallbackSummary = async () => {
+    const fallbackTargets = await listExistingWikiTargets(storage);
     fallbackTargets.add(`summaries/${docName}`);
     const { content } = stripGhostWikilinks(summary, fallbackTargets);
-    writeSummary(wikiDir, docName, content, { docType, description: docBrief });
+    await writeSummary(storage, docName, content, { docType, description: docBrief });
   };
 
   let conceptsPlan;
@@ -127,18 +127,27 @@ async function compileConcepts(
   } catch (error) {
     console.warn(`  [WARN] concepts plan unparseable for ${docName}: ${error}`);
     if (rewriteSummary) {
-      writeFallbackSummary();
+      await writeFallbackSummary();
     }
-    updateIndex(wikiDir, docName, [], { docBrief, docType });
+    await updateIndex(storage, docName, [], { docBrief, docType });
     return;
   }
 
-  conceptsPlan.related = conceptsPlan.related.filter((slug) =>
-    fs.existsSync(path.join(wikiDir, 'concepts', `${sanitizeSlug(slug)}.md`)),
-  );
-  entitiesPlan.related = entitiesPlan.related.filter((slug) =>
-    fs.existsSync(path.join(wikiDir, 'entities', `${sanitizeSlug(slug)}.md`)),
-  );
+  conceptsPlan.related = (
+    await Promise.all(
+      conceptsPlan.related.map(async (slug) =>
+        (await storage.exists(conceptPath(sanitizeSlug(slug)))) ? slug : null,
+      ),
+    )
+  ).filter((slug): slug is string => slug !== null);
+
+  entitiesPlan.related = (
+    await Promise.all(
+      entitiesPlan.related.map(async (slug) =>
+        (await storage.exists(entityPath(sanitizeSlug(slug)))) ? slug : null,
+      ),
+    )
+  ).filter((slug): slug is string => slug !== null);
 
   const isEmptyPlan =
     !conceptsPlan.create.length &&
@@ -150,9 +159,9 @@ async function compileConcepts(
 
   if (isEmptyPlan) {
     if (rewriteSummary) {
-      writeFallbackSummary();
+      await writeFallbackSummary();
     }
-    updateIndex(wikiDir, docName, [], { docBrief, docType });
+    await updateIndex(storage, docName, [], { docBrief, docType });
     return;
   }
 
@@ -168,7 +177,7 @@ async function compileConcepts(
   ]);
 
   const knownTargets = new Set([
-    ...listExistingWikiTargets(wikiDir),
+    ...(await listExistingWikiTargets(storage)),
     ...[...plannedSlugs].map((slug) => `concepts/${slug}`),
     ...[...entityPlanned].map((slug) => `entities/${slug}`),
     `summaries/${docName}`,
@@ -211,10 +220,10 @@ async function compileConcepts(
   const genUpdate = (concept: PlanItem) => async () => {
     const name = concept.name;
     const title = concept.title ?? name;
-    const conceptPath = path.join(wikiDir, 'concepts', `${sanitizeSlug(name)}.md`);
+    const relativePath = conceptPath(sanitizeSlug(name));
     let existingContent = '(page not found — create from scratch)';
-    if (fs.existsSync(conceptPath)) {
-      const rawText = fs.readFileSync(conceptPath, 'utf-8');
+    const rawText = await storage.readText(relativePath);
+    if (rawText) {
       const parts = frontmatter.split(rawText);
       existingContent = parts ? parts.body.trim() : rawText;
     }
@@ -279,10 +288,10 @@ async function compileConcepts(
     const name = entity.name;
     const title = entity.title ?? name;
     const etype = entity.type ?? 'other';
-    const entityPath = path.join(wikiDir, 'entities', `${sanitizeSlug(name)}.md`);
+    const relativePath = entityPath(sanitizeSlug(name));
     let existingContent = '(page not found — create from scratch)';
-    if (fs.existsSync(entityPath)) {
-      const rawText = fs.readFileSync(entityPath, 'utf-8');
+    const rawText = await storage.readText(relativePath);
+    if (rawText) {
       const parts = frontmatter.split(rawText);
       existingContent = parts ? parts.body.trim() : rawText;
     }
@@ -368,8 +377,8 @@ async function compileConcepts(
   for (const item of entityPending) {
     const { content } = stripGhostWikilinks(item.content, knownTargets);
     const safe = sanitizeSlug(item.name);
-    const isUpdate = fs.existsSync(path.join(wikiDir, 'entities', `${safe}.md`));
-    writeEntity(wikiDir, item.name, content, sourceFile, isUpdate, item.brief, item.type);
+    const isUpdate = await storage.exists(entityPath(safe));
+    await writeEntity(storage, item.name, content, sourceFile, isUpdate, item.brief, item.type);
     entityNames.push(safe);
     entityMeta[safe] = { type: item.type, brief: item.brief };
   }
@@ -402,35 +411,38 @@ async function compileConcepts(
       console.warn(`  summary-rewrite failed for ${docName}: ${error}`);
       finalSummary = stripGhostWikilinks(summary, knownTargets).content;
     }
-    writeSummary(wikiDir, docName, finalSummary, { docType, description: docBrief });
+    await writeSummary(storage, docName, finalSummary, { docType, description: docBrief });
   }
 
   for (const item of pendingWrites) {
-    writeConcept(wikiDir, item.name, item.content, sourceFile, item.isUpdate, item.brief);
+    await writeConcept(storage, item.name, item.content, sourceFile, item.isUpdate, item.brief);
   }
 
   const sanitizedRelated = conceptsPlan.related.map(sanitizeSlug);
   for (const slug of sanitizedRelated) {
-    addRelatedLink(wikiDir, slug, docName, sourceFile, 'concepts');
+    await addRelatedLink(storage, slug, docName, sourceFile, 'concepts');
   }
 
   const allConceptSlugs = [...conceptNames, ...sanitizedRelated];
   if (allConceptSlugs.length) {
-    backlinkSummary(wikiDir, docName, allConceptSlugs);
-    backlinkConcepts(wikiDir, docName, allConceptSlugs);
+    await backlinkSummary(storage, docName, allConceptSlugs);
+    await backlinkConcepts(storage, docName, allConceptSlugs);
   }
 
-  const entityRelatedSlugs = entitiesPlan.related
-    .map(sanitizeSlug)
-    .filter((slug) => addRelatedLink(wikiDir, slug, docName, sourceFile, 'entities'));
+  const entityRelatedSlugs: string[] = [];
+  for (const slug of entitiesPlan.related.map(sanitizeSlug)) {
+    if (await addRelatedLink(storage, slug, docName, sourceFile, 'entities')) {
+      entityRelatedSlugs.push(slug);
+    }
+  }
 
   const entityBacklinkSlugs = [...entityNames, ...entityRelatedSlugs];
   if (entityBacklinkSlugs.length) {
-    backlinkSummaryEntities(wikiDir, docName, entityBacklinkSlugs);
-    backlinkEntities(wikiDir, docName, entityBacklinkSlugs);
+    await backlinkSummaryEntities(storage, docName, entityBacklinkSlugs);
+    await backlinkEntities(storage, docName, entityBacklinkSlugs);
   }
 
-  updateIndex(wikiDir, docName, conceptNames, {
+  await updateIndex(storage, docName, conceptNames, {
     docBrief,
     conceptBriefs: conceptBriefsMap,
     docType,
@@ -444,14 +456,12 @@ export async function compileShortDoc(
   options: CompileShortDocOptions,
 ): Promise<void> {
   const config = loadConfig(options.config);
-  const { wikiDir } = resolvePaths(config);
-  const { docName, sourcePath } = options;
+  const { docName, sourceContent, storage } = options;
   const maxConcurrency = options.maxConcurrency ?? config.compileConcurrency;
 
-  const schemaMd = getAgentsMd(wikiDir);
-  const content = fs.readFileSync(sourcePath, 'utf-8');
+  const schemaMd = await getAgentsMd(storage);
   const systemMsg = buildSystemMessage(schemaMd, config.language);
-  const docMsg = buildDocMessage(docName, content);
+  const docMsg = buildDocMessage(docName, sourceContent);
 
   console.log(`Compiling ${docName}...`);
 
@@ -467,7 +477,7 @@ export async function compileShortDoc(
     summary = summaryRaw;
   }
 
-  await compileConcepts(client, wikiDir, systemMsg, docMsg, summary, docName, {
+  await compileConcepts(client, storage, systemMsg, docMsg, summary, docName, {
     docBrief,
     docType: 'short',
     entityTypes: config.entityTypes,
@@ -475,6 +485,6 @@ export async function compileShortDoc(
     rewriteSummary: true,
   });
 
-  appendLog(wikiDir, 'ingest', `Compiled ${docName} from raw/`);
+  await appendLog(storage, 'ingest', `Compiled ${docName} from raw/`);
   console.log(`  Done: ${docName}`);
 }

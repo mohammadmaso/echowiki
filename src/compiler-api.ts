@@ -1,8 +1,10 @@
 import { loadConfig, resolvePaths, type EchoWikiConfig } from './config.js';
 import { createLlmClient } from './llm/client.js';
+import type { WikiStorage } from './storage/types.js';
 import { compileShortDoc } from './wiki/compiler.js';
 
 export interface CompileDocumentOptions {
+  storage: WikiStorage;
   kbDir?: string;
   llmModel?: string;
   llmApiKey?: string;
@@ -13,8 +15,8 @@ export interface CompileDocumentOptions {
 
 export async function compileDocument(
   docName: string,
-  sourcePath: string,
-  options: CompileDocumentOptions = {},
+  sourceContent: string,
+  options: CompileDocumentOptions,
 ): Promise<void> {
   const config = loadConfig({
     ...(options.kbDir ? { kbDir: options.kbDir } : {}),
@@ -40,7 +42,8 @@ export async function compileDocument(
 
   await compileShortDoc(client, {
     docName,
-    sourcePath,
+    sourceContent,
+    storage: options.storage,
     config: {
       ...options.config,
       ...(options.kbDir ? { kbDir: options.kbDir } : {}),
@@ -56,3 +59,5 @@ export function getWikiDir(kbDir?: string): string {
 export function getRawDir(kbDir?: string): string {
   return resolvePaths(loadConfig(kbDir ? { kbDir } : {})).rawDir;
 }
+
+export type { WikiStorage } from './storage/types.js';

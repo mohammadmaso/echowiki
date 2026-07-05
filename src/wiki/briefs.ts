@@ -1,5 +1,5 @@
-import fs from 'node:fs';
-import path from 'node:path';
+import type { WikiStorage } from '../storage/types.js';
+import { joinWikiPath } from '../storage/types.js';
 import * as frontmatter from './frontmatter.js';
 
 function resolveDescription(fm: Record<string, string | string[]>): string {
@@ -18,18 +18,17 @@ function bodyPreview(text: string): string {
   return body.trim().replace(/\n/g, ' ').slice(0, 150);
 }
 
-export function readConceptBriefs(wikiDir: string): string {
-  const conceptsDir = path.join(wikiDir, 'concepts');
-  if (!fs.existsSync(conceptsDir)) {
-    return '(none yet)';
-  }
-  const files = fs.readdirSync(conceptsDir).filter((name) => name.endsWith('.md')).sort();
-  if (!files.length) {
+export async function readConceptBriefs(storage: WikiStorage): Promise<string> {
+  const names = (await storage.list('concepts')).filter((name) => name.endsWith('.md')).sort();
+  if (!names.length) {
     return '(none yet)';
   }
   const lines: string[] = [];
-  for (const file of files) {
-    const text = fs.readFileSync(path.join(conceptsDir, file), 'utf-8');
+  for (const file of names) {
+    const text = await storage.readText(joinWikiPath('concepts', file));
+    if (!text) {
+      continue;
+    }
     const fm = frontmatter.parse(text);
     const brief = resolveDescription(fm) || bodyPreview(text);
     if (brief) {
@@ -39,18 +38,17 @@ export function readConceptBriefs(wikiDir: string): string {
   return lines.length ? lines.join('\n') : '(none yet)';
 }
 
-export function readEntityBriefs(wikiDir: string): string {
-  const entitiesDir = path.join(wikiDir, 'entities');
-  if (!fs.existsSync(entitiesDir)) {
-    return '(none yet)';
-  }
-  const files = fs.readdirSync(entitiesDir).filter((name) => name.endsWith('.md')).sort();
-  if (!files.length) {
+export async function readEntityBriefs(storage: WikiStorage): Promise<string> {
+  const names = (await storage.list('entities')).filter((name) => name.endsWith('.md')).sort();
+  if (!names.length) {
     return '(none yet)';
   }
   const lines: string[] = [];
-  for (const file of files) {
-    const text = fs.readFileSync(path.join(entitiesDir, file), 'utf-8');
+  for (const file of names) {
+    const text = await storage.readText(joinWikiPath('entities', file));
+    if (!text) {
+      continue;
+    }
     const fm = frontmatter.parse(text);
     const brief = resolveDescription(fm) || bodyPreview(text);
     const etype = String(fm.type ?? 'other').toLowerCase();

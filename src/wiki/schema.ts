@@ -1,5 +1,4 @@
-import fs from 'node:fs';
-import path from 'node:path';
+import type { WikiStorage } from '../storage/types.js';
 
 export const PAGE_CONTENT_DIRS = ['summaries', 'concepts', 'entities'] as const;
 
@@ -36,10 +35,7 @@ export const DEFAULT_AGENTS_MD = `# Wiki Schema
 - Do not include YAML frontmatter (---) in generated content; it is managed by code.
 `;
 
-export function getAgentsMd(wikiDir: string): string {
-  const agentsFile = path.join(wikiDir, 'AGENTS.md');
-  if (fs.existsSync(agentsFile)) {
-    return fs.readFileSync(agentsFile, 'utf-8');
-  }
-  return DEFAULT_AGENTS_MD;
+export async function getAgentsMd(storage: WikiStorage): Promise<string> {
+  const content = await storage.readText('AGENTS.md');
+  return content ?? DEFAULT_AGENTS_MD;
 }

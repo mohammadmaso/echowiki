@@ -1,7 +1,7 @@
-import fs from 'node:fs';
-import path from 'node:path';
+import type { WikiStorage } from '../storage/types.js';
+import { joinWikiPath } from '../storage/types.js';
 import * as frontmatter from './frontmatter.js';
-import { sanitizeSlug } from './wikilink.js';
+import { conceptPath, entityPath, sanitizeSlug } from './wikilink.js';
 import { ensureH2Section, insertSectionEntry } from './index-writer.js';
 
 function prependSourceToFrontmatter(text: string, sourceFile: string): string {
@@ -25,18 +25,17 @@ function prependSourceToFrontmatter(text: string, sourceFile: string): string {
   return lines.join('\n') + parts.body;
 }
 
-export function writeSummary(
-  wikiDir: string,
+export async function writeSummary(
+  storage: WikiStorage,
   docName: string,
   summary: string,
   options: { docType?: string; description?: string } = {},
-): void {
+): Promise<void> {
   const { docType = 'short', description = '' } = options;
   const parts = frontmatter.split(summary);
   const body = (parts ? parts.body : summary).replace(/^\n+/, '');
 
-  const summariesDir = path.join(wikiDir, 'summaries');
-  fs.mkdirSync(summariesDir, { recursive: true });
+  await storage.ensureDir('summaries');
   const ext = docType === 'short' ? 'md' : 'json';
   const fmLines = [frontmatter.kvLine('type', 'Summary')];
   if (description) {
@@ -44,30 +43,30 @@ export function writeSummary(
   }
   fmLines.push(`doc_type: ${docType}`);
   fmLines.push(frontmatter.kvLine('full_text', `sources/${docName}.${ext}`));
-  frontmatter.atomicWriteText(
-    path.join(summariesDir, `${docName}.md`),
+  await frontmatter.atomicWriteText(
+    storage,
+    joinWikiPath('summaries', `${docName}.md`),
     frontmatter.block(fmLines) + body,
   );
 }
 
-export function writeConcept(
-  wikiDir: string,
+export async function writeConcept(
+  storage: WikiStorage,
   name: string,
   content: string,
   sourceFile: string,
   isUpdate: boolean,
   brief = '',
-): void {
-  const conceptsDir = path.join(wikiDir, 'concepts');
-  fs.mkdirSync(conceptsDir, { recursive: true });
+): Promise<void> {
+  await storage.ensureDir('concepts');
   const safeName = sanitizeSlug(name);
-  const filePath = path.join(conceptsDir, `${safeName}.md`);
+  const relativePath = conceptPath(safeName);
 
   const cleanParts = frontmatter.split(content);
   const cleanBody = (cleanParts ? cleanParts.body : content).replace(/^\n+/, '');
 
-  if (isUpdate && fs.existsSync(filePath)) {
-    let existing = fs.readFileSync(filePath, 'utf-8');
+  if (isUpdate && (await storage.exists(relativePath))) {
+    let existing = (await storage.readText(relativePath)) ?? '';
     if (!existing.includes(sourceFile)) {
       existing = prependSourceToFrontmatter(existing, sourceFile);
     }
@@ -78,7 +77,7 @@ export function writeConcept(
         fmBlock = frontmatter.setLine(fmBlock, 'description', brief);
       }
       fmBlock = frontmatter.dropLine(fmBlock, 'brief');
-      frontmatter.atomicWriteText(filePath, fmBlock + '\n' + cleanBody);
+      await frontmatter.atomicWriteText(storage, relativePath, fmBlock + '\n' + cleanBody);
       return;
     }
   }
@@ -90,22 +89,21 @@ export function writeConcept(
   if (brief) {
     fmLines.push(frontmatter.kvLine('description', brief));
   }
-  frontmatter.atomicWriteText(filePath, frontmatter.block(fmLines) + cleanBody);
+  await frontmatter.atomicWriteText(storage, relativePath, frontmatter.block(fmLines) + cleanBody);
 }
 
-export function writeEntity(
-  wikiDir: string,
+export async function writeEntity(
+  storage: WikiStorage,
   name: string,
   content: string,
   sourceFile: string,
   isUpdate: boolean,
   brief = '',
   type = 'other',
-): void {
-  const entitiesDir = path.join(wikiDir, 'entities');
-  fs.mkdirSync(entitiesDir, { recursive: true });
+): Promise<void> {
+  await storage.ensureDir('entities');
   const safeName = sanitizeSlug(name);
-  const filePath = path.join(entitiesDir, `${safeName}.md`);
+  const relativePath = entityPath(safeName);
 
   const cleanParts = frontmatter.split(content);
   const cleanBody = (cleanParts ? cleanParts.body : content).replace(/^\n+/, '');
@@ -117,8 +115,8 @@ export function writeEntity(
       ...(brief ? [frontmatter.kvLine('description', brief)] : []),
     ]);
 
-  if (isUpdate && fs.existsSync(filePath)) {
-    let existing = fs.readFileSync(filePath, 'utf-8');
+  if (isUpdate && (await storage.exists(relativePath))) {
+    let existing = (await storage.readText(relativePath)) ?? '';
     if (!existing.includes(sourceFile)) {
       existing = prependSourceToFrontmatter(existing, sourceFile);
     }
@@ -132,27 +130,27 @@ export function writeEntity(
         fmBlock = frontmatter.setLine(fmBlock, 'type', type.replace(/^\w/, (c) => c.toUpperCase()));
       }
       fmBlock = frontmatter.dropLine(fmBlock, 'brief');
-      frontmatter.atomicWriteText(filePath, fmBlock + '\n' + cleanBody);
+      await frontmatter.atomicWriteText(storage, relativePath, fmBlock + '\n' + cleanBody);
       return;
     }
   }
 
-  frontmatter.atomicWriteText(filePath, buildEntityFrontmatter([sourceFile]) + cleanBody);
+  await frontmatter.atomicWriteText(storage, relativePath, buildEntityFrontmatter([sourceFile]) + cleanBody);
 }
 
-export function addRelatedLink(
-  wikiDir: string,
+export async function addRelatedLink(
+  storage: WikiStorage,
   slug: string,
   docName: string,
   sourceFile: string,
   pageDir: 'concepts' | 'entities' = 'concepts',
-): boolean {
-  const filePath = path.join(wikiDir, pageDir, `${slug}.md`);
-  if (!fs.existsSync(filePath)) {
+): Promise<boolean> {
+  const relativePath = joinWikiPath(pageDir, `${slug}.md`);
+  if (!(await storage.exists(relativePath))) {
     return false;
   }
   const link = `[[summaries/${docName}]]`;
-  let text = fs.readFileSync(filePath, 'utf-8');
+  let text = (await storage.readText(relativePath)) ?? '';
   if (text.includes(link)) {
     return true;
   }
@@ -160,22 +158,22 @@ export function addRelatedLink(
     text = prependSourceToFrontmatter(text, sourceFile);
   }
   text += `\n\nSee also: ${link}`;
-  frontmatter.atomicWriteText(filePath, text);
+  await frontmatter.atomicWriteText(storage, relativePath, text);
   return true;
 }
 
-function backlinkSummaryPages(
-  wikiDir: string,
+async function backlinkSummaryPages(
+  storage: WikiStorage,
   docName: string,
   slugs: string[],
   pageDir: 'concepts' | 'entities',
   section: string,
-): void {
-  const summaryPath = path.join(wikiDir, 'summaries', `${docName}.md`);
-  if (!fs.existsSync(summaryPath)) {
+): Promise<void> {
+  const summaryPath = joinWikiPath('summaries', `${docName}.md`);
+  if (!(await storage.exists(summaryPath))) {
     return;
   }
-  const text = fs.readFileSync(summaryPath, 'utf-8');
+  const text = (await storage.readText(summaryPath)) ?? '';
   const missing = slugs.filter((slug) => !text.includes(`[[${pageDir}/${slug}]]`));
   if (!missing.length) {
     return;
@@ -185,45 +183,48 @@ function backlinkSummaryPages(
   for (const slug of [...missing].reverse()) {
     insertSectionEntry(lines, section, `- [[${pageDir}/${slug}]]`);
   }
-  frontmatter.atomicWriteText(summaryPath, lines.join('\n'));
+  await frontmatter.atomicWriteText(storage, summaryPath, lines.join('\n'));
 }
 
-function backlinkPages(
-  wikiDir: string,
+async function backlinkPages(
+  storage: WikiStorage,
   docName: string,
   slugs: string[],
   pageDir: 'concepts' | 'entities',
-): void {
+): Promise<void> {
   const link = `[[summaries/${docName}]]`;
-  const pagesDir = path.join(wikiDir, pageDir);
   for (const slug of slugs) {
-    const filePath = path.join(pagesDir, `${slug}.md`);
-    if (!fs.existsSync(filePath)) {
+    const relativePath = joinWikiPath(pageDir, `${slug}.md`);
+    if (!(await storage.exists(relativePath))) {
       continue;
     }
-    const text = fs.readFileSync(filePath, 'utf-8');
+    const text = (await storage.readText(relativePath)) ?? '';
     if (text.includes(link)) {
       continue;
     }
     const lines = text.split('\n');
     ensureH2Section(lines, '## Related Documents', true);
     insertSectionEntry(lines, '## Related Documents', `- ${link}`);
-    frontmatter.atomicWriteText(filePath, lines.join('\n'));
+    await frontmatter.atomicWriteText(storage, relativePath, lines.join('\n'));
   }
 }
 
-export function backlinkSummary(wikiDir: string, docName: string, conceptSlugs: string[]): void {
-  backlinkSummaryPages(wikiDir, docName, conceptSlugs, 'concepts', '## Related Concepts');
+export async function backlinkSummary(storage: WikiStorage, docName: string, conceptSlugs: string[]): Promise<void> {
+  await backlinkSummaryPages(storage, docName, conceptSlugs, 'concepts', '## Related Concepts');
 }
 
-export function backlinkConcepts(wikiDir: string, docName: string, conceptSlugs: string[]): void {
-  backlinkPages(wikiDir, docName, conceptSlugs, 'concepts');
+export async function backlinkConcepts(storage: WikiStorage, docName: string, conceptSlugs: string[]): Promise<void> {
+  await backlinkPages(storage, docName, conceptSlugs, 'concepts');
 }
 
-export function backlinkSummaryEntities(wikiDir: string, docName: string, entitySlugs: string[]): void {
-  backlinkSummaryPages(wikiDir, docName, entitySlugs, 'entities', '## Related Entities');
+export async function backlinkSummaryEntities(
+  storage: WikiStorage,
+  docName: string,
+  entitySlugs: string[],
+): Promise<void> {
+  await backlinkSummaryPages(storage, docName, entitySlugs, 'entities', '## Related Entities');
 }
 
-export function backlinkEntities(wikiDir: string, docName: string, entitySlugs: string[]): void {
-  backlinkPages(wikiDir, docName, entitySlugs, 'entities');
+export async function backlinkEntities(storage: WikiStorage, docName: string, entitySlugs: string[]): Promise<void> {
+  await backlinkPages(storage, docName, entitySlugs, 'entities');
 }

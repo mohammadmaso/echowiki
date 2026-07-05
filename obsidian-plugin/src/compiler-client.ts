@@ -1,10 +1,10 @@
-import { compileDocument } from '@echowiki/compiler-api';
+import { compileDocument, type WikiStorage } from '@echowiki/compiler-api';
 import type { EchoWikiPluginSettings } from './settings';
 
 export interface CompileDocumentInput {
   docName: string;
-  sourcePath: string;
-  kbDir: string;
+  sourceContent: string;
+  storage: WikiStorage;
   llmModel: string;
   llmApiKey: string;
   llmBaseUrl?: string;
@@ -17,8 +17,8 @@ export interface CompileDocumentResult {
 }
 
 export async function runCompileDocument(input: CompileDocumentInput): Promise<CompileDocumentResult> {
-  await compileDocument(input.docName, input.sourcePath, {
-    kbDir: input.kbDir,
+  await compileDocument(input.docName, input.sourceContent, {
+    storage: input.storage,
     llmModel: input.llmModel,
     llmApiKey: input.llmApiKey,
     llmBaseUrl: input.llmBaseUrl,

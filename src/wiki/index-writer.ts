@@ -1,5 +1,4 @@
-import fs from 'node:fs';
-import path from 'node:path';
+import type { WikiStorage } from '../storage/types.js';
 import { INDEX_SEED } from './schema.js';
 import { atomicWriteText } from './frontmatter.js';
 
@@ -85,8 +84,8 @@ function insertSectionEntry(lines: string[], heading: string, entry: string): bo
   return true;
 }
 
-export function updateIndex(
-  wikiDir: string,
+export async function updateIndex(
+  storage: WikiStorage,
   docName: string,
   conceptNames: string[],
   options: {
@@ -96,7 +95,7 @@ export function updateIndex(
     entityNames?: string[];
     entityMeta?: Record<string, { type: string; brief: string }>;
   } = {},
-): void {
+): Promise<void> {
   const {
     docBrief = '',
     conceptBriefs = {},
@@ -105,12 +104,12 @@ export function updateIndex(
     entityMeta = {},
   } = options;
 
-  const indexPath = path.join(wikiDir, 'index.md');
-  if (!fs.existsSync(indexPath)) {
-    atomicWriteText(indexPath, INDEX_SEED);
+  if (!(await storage.exists('index.md'))) {
+    await atomicWriteText(storage, 'index.md', INDEX_SEED);
   }
 
-  const lines = fs.readFileSync(indexPath, 'utf-8').split('\n');
+  const indexText = await storage.readText('index.md');
+  const lines = (indexText ?? INDEX_SEED).split('\n');
   ensureH2Section(lines, '## Documents');
   if (conceptNames.length) {
     ensureH2Section(lines, '## Concepts');
@@ -157,17 +156,16 @@ export function updateIndex(
     }
   }
 
-  atomicWriteText(indexPath, lines.join('\n'));
+  await atomicWriteText(storage, 'index.md', lines.join('\n'));
 }
 
-export function appendLog(wikiDir: string, operation: string, description: string): void {
-  const logPath = path.join(wikiDir, 'log.md');
+export async function appendLog(storage: WikiStorage, operation: string, description: string): Promise<void> {
   const timestamp = new Date().toISOString().replace('T', ' ').slice(0, 19);
   const entry = `\n## [${timestamp}] ${operation} | ${description}\n`;
-  if (fs.existsSync(logPath)) {
-    fs.appendFileSync(logPath, entry, 'utf-8');
+  if (await storage.exists('log.md')) {
+    await storage.appendText('log.md', entry);
   } else {
-    atomicWriteText(logPath, `# Operations Log${entry}`);
+    await atomicWriteText(storage, 'log.md', `# Operations Log${entry}`);
   }
 }
 
