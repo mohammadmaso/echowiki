@@ -11,7 +11,10 @@
     "importHelpers": true,
     "isolatedModules": true,
     "strictNullChecks": true,
-    "lib": ["DOM", "ES2022"]
+    "lib": ["DOM", "ES2022"],
+    "paths": {
+      "@echowiki/*": ["../src/*"]
+    }
   },
   "include": ["src/**/*.ts"]
 }

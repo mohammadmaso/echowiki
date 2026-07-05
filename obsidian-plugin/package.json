@@ -3,7 +3,6 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build:mastra-server": "node scripts/copy-mastra-server.mjs",
     "build": "node esbuild.config.mjs production",
     "dev": "node esbuild.config.mjs"
   },

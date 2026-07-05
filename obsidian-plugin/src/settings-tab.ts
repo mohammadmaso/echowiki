@@ -1,6 +1,6 @@
 import { App, Notice, PluginSettingTab, Setting } from 'obsidian';
 import type EchoWikiPlugin from './main';
-import { isMastraServerInstalled } from './mastra-server-bootstrap';
+import { testLlmConnection } from './compiler-client';
 import { testSttConnection } from './stt-client';
 
 export class EchoWikiSettingTab extends PluginSettingTab {
@@ -11,29 +11,6 @@ export class EchoWikiSettingTab extends PluginSettingTab {
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
-
-    new Setting(containerEl)
-      .setName('Node.js path')
-      .setDesc('Path to Node.js ≥ 22 used to run the bundled Mastra server.')
-      .addText((text) =>
-        text.setValue(this.plugin.settings.nodePath).onChange(async (value) => {
-          this.plugin.settings.nodePath = value.trim() || 'node';
-          await this.plugin.saveSettings();
-        }),
-      );
-
-    new Setting(containerEl)
-      .setName('Mastra port')
-      .setDesc('Preferred localhost port for the embedded Mastra server.')
-      .addText((text) =>
-        text.setValue(String(this.plugin.settings.mastraPort)).onChange(async (value) => {
-          const parsed = Number.parseInt(value, 10);
-          if (!Number.isNaN(parsed)) {
-            this.plugin.settings.mastraPort = parsed;
-            await this.plugin.saveSettings();
-          }
-        }),
-      );
 
     new Setting(containerEl)
       .setName('Raw folder')
@@ -75,7 +52,7 @@ export class EchoWikiSettingTab extends PluginSettingTab {
         }),
       );
 
-    new Setting(containerEl).setName('LLM (Mastra server)').setHeading();
+    new Setting(containerEl).setName('LLM').setHeading();
 
     new Setting(containerEl)
       .setName('LLM base URL')
@@ -89,7 +66,7 @@ export class EchoWikiSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('LLM API key')
-      .setDesc('Passed to the bundled Mastra server as OPENAI_API_KEY.')
+      .setDesc('Used for wiki compilation via the Vercel AI SDK.')
       .addText((text) => {
         text.inputEl.type = 'password';
         text.setValue(this.plugin.settings.llmApiKey).onChange(async (value) => {
@@ -146,36 +123,18 @@ export class EchoWikiSettingTab extends PluginSettingTab {
         }),
       );
 
-    new Setting(containerEl).setName('Server').setHeading();
-
-    const backendInstalled = isMastraServerInstalled(this.plugin.getPluginDir());
-    new Setting(containerEl)
-      .setName('Compiler backend')
-      .setDesc(
-        backendInstalled
-          ? 'Bundled Mastra server is installed in the plugin folder.'
-          : 'Required on first install from Community Plugins. Downloads ~180 MB once from GitHub releases.',
-      )
-      .addButton((button) =>
-        button.setButtonText(backendInstalled ? 'Reinstall backend' : 'Install backend').onClick(() => {
-          void this.plugin.installCompilerBackend(backendInstalled);
-        }),
-      );
+    new Setting(containerEl).setName('Connection tests').setHeading();
 
     new Setting(containerEl)
-      .setName('Restart Mastra server')
-      .setDesc('Apply LLM settings and relaunch the embedded server.')
+      .setName('Test LLM connection')
       .addButton((button) =>
-        button.setButtonText('Restart').onClick(() => {
-          void this.plugin.restartServer();
-        }),
-      );
-
-    new Setting(containerEl)
-      .setName('Test Mastra connection')
-      .addButton((button) =>
-        button.setButtonText('Test').onClick(() => {
-          void this.plugin.testMastraConnection();
+        button.setButtonText('Test').onClick(async () => {
+          try {
+            const text = await testLlmConnection(this.plugin.settings);
+            new Notice(`LLM OK: ${text.slice(0, 80)}`);
+          } catch (error) {
+            new Notice(`LLM failed: ${error instanceof Error ? error.message : String(error)}`);
+          }
         }),
       );
 

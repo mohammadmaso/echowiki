@@ -1,4 +1,4 @@
-import type { Agent } from '@mastra/core/agent';
+import type { LlmClient } from '../llm/client.js';
 
 export type LlmMessage =
   | { role: 'system'; content: string }
@@ -6,20 +6,11 @@ export type LlmMessage =
   | { role: 'assistant'; content: string };
 
 export async function llmCall(
-  agent: Agent,
+  client: LlmClient,
   messages: LlmMessage[],
   stepName: string,
 ): Promise<string> {
-  console.log(`  ${stepName}...`);
-  const result = await agent.generate(messages, {
-    toolChoice: 'none',
-    maxSteps: 1,
-  });
-  const text = result.text?.trim() ?? '';
-  if (!text) {
-    console.warn(`  [WARN] ${stepName} returned empty response`);
-  }
-  return text;
+  return client.generate(messages, stepName);
 }
 
 export function parseJson(text: string): unknown {

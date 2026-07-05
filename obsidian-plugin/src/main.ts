@@ -7,16 +7,15 @@ import {
   normalizePath,
 } from 'obsidian';
 import { ApprovalModal } from './approval-modal';
-import { ensureMastraServerInstalled, isMastraServerInstalled } from './mastra-server-bootstrap';
-import { MastraProcessManager } from './mastra-process-manager';
+import { runCompileDocument } from './compiler-client';
 import { RawWatcher } from './raw-watcher';
 import {
   DEFAULT_PLUGIN_DATA,
   DEFAULT_SETTINGS,
+  type CompilerStatus,
   type EchoWikiPluginData,
   type EchoWikiPluginSettings,
   type PendingItem,
-  type ServerStatus,
 } from './settings';
 import { EchoWikiSettingTab } from './settings-tab';
 import { transcribeAudio } from './stt-client';
@@ -33,45 +32,18 @@ import { VoiceModal } from './voice-modal';
 export default class EchoWikiPlugin extends Plugin {
   settings: EchoWikiPluginSettings = { ...DEFAULT_SETTINGS };
   pluginData: EchoWikiPluginData = { ...DEFAULT_PLUGIN_DATA };
-  processManager: MastraProcessManager | null = null;
   rawWatcher: RawWatcher | null = null;
   statusBarItem: HTMLElement | null = null;
   inFlight = new Set<string>();
   lastCompileMessage = '';
+  compilerStatus: CompilerStatus = 'ready';
 
   async onload(): Promise<void> {
     await this.loadSettings();
     await this.ensureVaultFolders();
 
     this.statusBarItem = this.addStatusBarItem();
-    this.updateStatusBar('starting');
-
-    try {
-      await ensureMastraServerInstalled(this.getPluginDir(), this.manifest.version);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.updateStatusBar('error', 'Compiler backend missing');
-      new Notice(
-        `EchoWiki: failed to install compiler backend. Use Settings → EchoWiki → Install compiler backend. (${message})`,
-        10_000,
-      );
-    }
-
-    if (isMastraServerInstalled(this.getPluginDir())) {
-      this.processManager = new MastraProcessManager({
-        pluginDir: this.getPluginDir(),
-        pluginDataDir: this.getPluginDataDir(),
-        vaultRoot: this.getVaultRoot(),
-        settings: this.settings,
-        onStatusChange: (status, detail) => this.updateStatusBar(status, detail),
-      });
-
-      void this.processManager.start().then((ready) => {
-        if (!ready) {
-          new Notice('EchoWiki: Mastra server failed to start. Check settings and Node.js.');
-        }
-      });
-    }
+    this.updateStatusBar('ready');
 
     this.rawWatcher = new RawWatcher(this.app, this);
     this.rawWatcher.attach();
@@ -113,7 +85,6 @@ export default class EchoWikiPlugin extends Plugin {
 
   async onunload(): Promise<void> {
     this.rawWatcher?.detach();
-    await this.processManager?.stop();
     this.statusBarItem?.remove();
   }
 
@@ -123,14 +94,6 @@ export default class EchoWikiPlugin extends Plugin {
       return adapter.getBasePath();
     }
     throw new Error('EchoWiki requires the desktop app with a local vault folder.');
-  }
-
-  getPluginDir(): string {
-    return join(this.getVaultRoot(), this.manifest.dir ?? '.obsidian/plugins/echowiki');
-  }
-
-  getPluginDataDir(): string {
-    return this.getPluginDir();
   }
 
   async loadSettings(): Promise<void> {
@@ -148,7 +111,6 @@ export default class EchoWikiPlugin extends Plugin {
       ...this.settings,
       pendingQueue: this.pluginData.pendingQueue,
     });
-    this.processManager?.updateSettings(this.settings);
   }
 
   getPendingQueue(): PendingItem[] {
@@ -243,11 +205,10 @@ export default class EchoWikiPlugin extends Plugin {
     if (this.inFlight.has(vaultRelativePath)) {
       return;
     }
-    if (!this.processManager || this.processManager.getStatus() !== 'ready') {
-      throw new Error('Mastra server is not ready. Check the status bar or restart the server in settings.');
-    }
 
     this.inFlight.add(vaultRelativePath);
+    this.compilerStatus = 'compiling';
+    this.updateStatusBar('compiling', vaultRelativePath);
     const notice = new Notice(`EchoWiki: compiling ${vaultRelativePath}...`, 0);
 
     try {
@@ -260,7 +221,7 @@ export default class EchoWikiPlugin extends Plugin {
 
       const sourcePath = join(this.getVaultRoot(), vaultRelativePath);
       const docName = docNameFromPath(vaultRelativePath);
-      await this.processManager.client.compileDocument({
+      await runCompileDocument({
         docName,
         sourcePath,
         kbDir: this.getVaultRoot(),
@@ -269,15 +230,17 @@ export default class EchoWikiPlugin extends Plugin {
         llmBaseUrl: this.settings.llmBaseUrl.trim() || undefined,
         language: this.settings.language.trim() || undefined,
       });
+      this.compilerStatus = 'ready';
       this.lastCompileMessage = `Compiled ${docName}`;
       new Notice(`EchoWiki: compiled ${docName}`, 5000);
     } catch (error) {
+      this.compilerStatus = 'error';
       this.lastCompileMessage = 'Compile failed';
       throw error;
     } finally {
       notice.hide();
       this.inFlight.delete(vaultRelativePath);
-      this.updateStatusBar(this.processManager?.getStatus() ?? 'stopped', this.lastCompileMessage);
+      this.updateStatusBar(this.compilerStatus, this.lastCompileMessage);
     }
   }
 
@@ -292,72 +255,19 @@ export default class EchoWikiPlugin extends Plugin {
     await ensureFolder(`${normalizePath(this.settings.wikiFolder)}/reports`, adapter);
   }
 
-  async installCompilerBackend(force = false): Promise<boolean> {
-    const notice = new Notice(
-      force ? 'EchoWiki: reinstalling compiler backend...' : 'EchoWiki: installing compiler backend...',
-      0,
-    );
-    try {
-      if (force) {
-        const { reinstallMastraServer } = await import('./mastra-server-bootstrap');
-        await reinstallMastraServer(this.getPluginDir(), this.manifest.version);
-      } else {
-        await ensureMastraServerInstalled(this.getPluginDir(), this.manifest.version);
-      }
-      await this.restartServer();
-      new Notice('EchoWiki: compiler backend installed', 5000);
-      return true;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      new Notice(`EchoWiki: compiler backend install failed (${message})`, 10_000);
-      this.updateStatusBar('error', 'Compiler backend missing');
-      return false;
-    } finally {
-      notice.hide();
-    }
-  }
-
-  async restartServer(): Promise<void> {
-    if (!isMastraServerInstalled(this.getPluginDir())) {
-      new Notice('EchoWiki: compiler backend is not installed.');
-      return;
-    }
-
-    if (!this.processManager) {
-      this.processManager = new MastraProcessManager({
-        pluginDir: this.getPluginDir(),
-        pluginDataDir: this.getPluginDataDir(),
-        vaultRoot: this.getVaultRoot(),
-        settings: this.settings,
-        onStatusChange: (status, detail) => this.updateStatusBar(status, detail),
-      });
-    }
-
-    this.processManager.updateSettings(this.settings);
-    const ready = await this.processManager.restart();
-    new Notice(ready ? 'EchoWiki: Mastra server restarted' : 'EchoWiki: Mastra server failed to restart');
-  }
-
-  async testMastraConnection(): Promise<void> {
-    const ready = this.processManager ? await this.processManager.client.isHealthy() : false;
-    new Notice(ready ? 'Mastra connection OK' : 'Mastra connection failed');
-  }
-
-  updateStatusBar(status: ServerStatus, detail = ''): void {
+  updateStatusBar(status: CompilerStatus, detail = ''): void {
     if (!this.statusBarItem) {
       return;
     }
     this.statusBarItem.removeClass('echowiki-status-bar-error', 'echowiki-status-bar-ready');
-    const port = this.processManager?.getPort();
-    let label = 'EchoWiki: stopped';
-    if (status === 'starting') {
-      label = 'EchoWiki: starting...';
-    } else if (status === 'ready') {
-      label = `EchoWiki: ready :${port}`;
-      this.statusBarItem.addClass('echowiki-status-bar-ready');
+    let label = 'EchoWiki: ready';
+    if (status === 'compiling') {
+      label = 'EchoWiki: compiling...';
     } else if (status === 'error') {
       label = `EchoWiki: error${detail ? ` (${detail})` : ''}`;
       this.statusBarItem.addClass('echowiki-status-bar-error');
+    } else {
+      this.statusBarItem.addClass('echowiki-status-bar-ready');
     }
     if (detail && status === 'ready') {
       label = `${label} · ${detail}`;

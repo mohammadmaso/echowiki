@@ -1,6 +1,4 @@
 export interface EchoWikiPluginSettings {
-  nodePath: string;
-  mastraPort: number;
   rawFolder: string;
   wikiFolder: string;
   requireApproval: boolean;
@@ -24,8 +22,6 @@ export interface EchoWikiPluginData {
 }
 
 export const DEFAULT_SETTINGS: EchoWikiPluginSettings = {
-  nodePath: 'node',
-  mastraPort: 4111,
   rawFolder: 'raw',
   wikiFolder: 'wiki',
   requireApproval: true,
@@ -43,4 +39,4 @@ export const DEFAULT_PLUGIN_DATA: EchoWikiPluginData = {
   pendingQueue: [],
 };
 
-export type ServerStatus = 'stopped' | 'starting' | 'ready' | 'error';
+export type CompilerStatus = 'ready' | 'compiling' | 'error';

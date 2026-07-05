@@ -1,7 +1,11 @@
 import esbuild from 'esbuild';
 import process from 'node:process';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import builtins from 'builtin-modules';
 
+const scriptDir = fileURLToPath(new URL('.', import.meta.url));
+const repoRoot = resolve(scriptDir, '..');
 const prod = process.argv[2] === 'production';
 
 const context = await esbuild.context({
@@ -18,6 +22,9 @@ const context = await esbuild.context({
   treeShaking: true,
   outfile: 'main.js',
   platform: 'node',
+  alias: {
+    '@echowiki': resolve(repoRoot, 'src'),
+  },
 });
 
 if (prod) {

@@ -1,9 +1,9 @@
-# Project Context & Rules — OpenKB-for-Obsidian (Mastra Implementation)
+# Project Context & Rules — OpenKB-for-Obsidian (Vercel AI SDK)
 
 ## What this project is
-A full reimplementation of [VectifyAI/OpenKB](https://github.com/VectifyAI/OpenKB) — an open-source LLM Knowledge Base compiler — built on the **Mastra** agent framework (TypeScript/Node) instead of OpenKB's original Python stack (OpenAI Agents SDK + LiteLLM).
+A full reimplementation of [VectifyAI/OpenKB](https://github.com/VectifyAI/OpenKB) — an open-source LLM Knowledge Base compiler — built with the **Vercel AI SDK** (TypeScript/Node) instead of OpenKB's original Python stack (OpenAI Agents SDK + LiteLLM).
 
-A single `raw/` folder is the universal ingestion point: voice recordings (transcribed via STT) and manually authored/dropped Markdown/text files both land there and are compiled identically. A Mastra agent compiles everything in `raw/` into a structured, interlinked `wiki/` — summaries, concept pages, entity pages, cross-links — with OKF-schema frontmatter, viewable natively as an Obsidian vault.
+A single `raw/` folder is the universal ingestion point: voice recordings (transcribed via STT) and manually authored/dropped Markdown/text files both land there and are compiled identically. The wiki compiler compiles everything in `raw/` into a structured, interlinked `wiki/` — summaries, concept pages, entity pages, cross-links — with OKF-schema frontmatter, viewable natively as an Obsidian vault.
 
 See `01-PRD.md` and `02-TECH-SPEC.md` for full product/technical context. Follow `03-TASKS.md` task-by-task; do not skip ahead or bundle multiple tasks into one change.
 
@@ -16,7 +16,7 @@ Treat [VectifyAI/OpenKB](https://github.com/VectifyAI/OpenKB) as the architectur
 - Obsidian-native output: plain Markdown + `[[wikilinks]]`, no proprietary format.
 
 ## Tech Stack
-- Mastra (TypeScript/Node) for agent orchestration (workflows for watch/add, agents for compilation steps).
+- Vercel AI SDK (`ai` + `@ai-sdk/openai`) for LLM calls — compilation runs in-process inside the Obsidian plugin (no child process / HTTP server).
 - Node-native file watching (`chokidar` or `fs.watch`) as the functional analog of upstream's `watchdog`-based `openkb watch`.
 - HTTP calls to user-configured, OpenAI-compatible STT and LLM endpoints — no hardcoded provider.
 - Voice capture UI: Obsidian plugin (Obsidian Plugin API) if integrated into Obsidian directly, or a standalone companion app if decoupled — this is still an open decision (see PRD open questions); do not assume one without confirming.
@@ -34,7 +34,7 @@ Treat [VectifyAI/OpenKB](https://github.com/VectifyAI/OpenKB) as the architectur
 ## Code Style
 - Idiomatic TypeScript, strict mode.
 - Keep these concerns in separate modules, not one file: (1) ingestion (voice capture + raw file handling), (2) folder watcher/workflow, (3) compilation agent logic (summary/concept/entity steps), (4) wiki file I/O.
-- Prefer small, testable functions/steps per Mastra workflow stage.
+- Prefer small, testable functions per compilation step.
 
 ## What NOT to do
 - Don't build voice-only special paths — every ingestion path must converge on the same `raw/` → compilation flow.

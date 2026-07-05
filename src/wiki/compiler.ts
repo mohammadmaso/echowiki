@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { Agent } from '@mastra/core/agent';
+import type { LlmClient } from '../llm/client.js';
 import type { EchoWikiConfig } from '../config.js';
 import { loadConfig, resolvePaths } from '../config.js';
 import { readConceptBriefs, readEntityBriefs } from './briefs.js';
@@ -70,7 +70,7 @@ function buildDocMessage(docName: string, content: string): LlmMessage {
 }
 
 async function compileConcepts(
-  agent: Agent,
+  client: LlmClient,
   wikiDir: string,
   systemMsg: LlmMessage,
   docMsg: LlmMessage,
@@ -94,7 +94,7 @@ async function compileConcepts(
   const summaryMsg: LlmMessage = { role: 'assistant', content: summary };
 
   const planRaw = await llmCall(
-    agent,
+    client,
     [
       systemMsg,
       docMsg,
@@ -184,7 +184,7 @@ async function compileConcepts(
     const name = concept.name;
     const title = concept.title ?? name;
     const raw = await llmCall(
-      agent,
+      client,
       [
         systemMsg,
         docMsg,
@@ -219,7 +219,7 @@ async function compileConcepts(
       existingContent = parts ? parts.body.trim() : rawText;
     }
     const raw = await llmCall(
-      agent,
+      client,
       [
         systemMsg,
         docMsg,
@@ -248,7 +248,7 @@ async function compileConcepts(
     const title = entity.title ?? name;
     const etype = entity.type ?? 'other';
     const raw = await llmCall(
-      agent,
+      client,
       [
         systemMsg,
         docMsg,
@@ -287,7 +287,7 @@ async function compileConcepts(
       existingContent = parts ? parts.body.trim() : rawText;
     }
     const raw = await llmCall(
-      agent,
+      client,
       [
         systemMsg,
         docMsg,
@@ -384,7 +384,7 @@ async function compileConcepts(
   if (rewriteSummary) {
     try {
       let candidate = await llmCall(
-        agent,
+        client,
         [systemMsg, docMsg, summaryMsg, knownTargetsMsg, { role: 'user', content: SUMMARY_REWRITE_USER }],
         'summary-rewrite',
       );
@@ -440,7 +440,7 @@ async function compileConcepts(
 }
 
 export async function compileShortDoc(
-  agent: Agent,
+  client: LlmClient,
   options: CompileShortDocOptions,
 ): Promise<void> {
   const config = loadConfig(options.config);
@@ -455,7 +455,7 @@ export async function compileShortDoc(
 
   console.log(`Compiling ${docName}...`);
 
-  const summaryRaw = await llmCall(agent, [systemMsg, docMsg], 'summary');
+  const summaryRaw = await llmCall(client, [systemMsg, docMsg], 'summary');
   let docBrief = '';
   let summary = summaryRaw;
   try {
@@ -467,7 +467,7 @@ export async function compileShortDoc(
     summary = summaryRaw;
   }
 
-  await compileConcepts(agent, wikiDir, systemMsg, docMsg, summary, docName, {
+  await compileConcepts(client, wikiDir, systemMsg, docMsg, summary, docName, {
     docBrief,
     docType: 'short',
     entityTypes: config.entityTypes,

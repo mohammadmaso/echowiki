@@ -18,22 +18,14 @@ jobs:
         with:
           node-version-file: .nvmrc
 
-      - name: Build Mastra server
-        run: |
-          npm ci
-          npm run build
+      - name: Install dependencies
+        run: npm ci
 
       - name: Build Obsidian plugin
         run: |
           cd obsidian-plugin
           npm ci
-          npm run build:mastra-server
           npm run build
-
-      - name: Package Mastra server archive
-        run: |
-          find obsidian-plugin/mastra-server -type f \( -name '*.db' -o -name '*.db-*' -o -name '*.duckdb' -o -name '*.duckdb.*' \) -delete
-          tar -czf mastra-server.tar.gz -C obsidian-plugin mastra-server
 
       - name: Create release
         env:
@@ -45,5 +37,4 @@ jobs:
             --generate-notes \
             obsidian-plugin/main.js \
             manifest.json \
-            obsidian-plugin/styles.css \
-            mastra-server.tar.gz
+            obsidian-plugin/styles.css

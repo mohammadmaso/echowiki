@@ -1,6 +1,6 @@
 # EchoWiki
 
-Local-first LLM knowledge compiler for Obsidian. Drop notes or record voice into `raw/`; the Mastra wiki compiler agent turns them into a structured, interlinked wiki under `wiki/`.
+Local-first LLM knowledge compiler for Obsidian. Drop notes or record voice into `raw/`; the wiki compiler turns them into a structured, interlinked wiki under `wiki/`.
 
 Repository: [github.com/mohammadmaso/echowiki](https://github.com/mohammadmaso/echowiki)
 
@@ -9,9 +9,7 @@ Repository: [github.com/mohammadmaso/echowiki](https://github.com/mohammadmaso/e
 Once published, install EchoWiki from any vault:
 
 1. **Settings → Community plugins → Browse** → search **EchoWiki** → Install → Enable.
-2. Requires **Node.js ≥ 22.13** on your PATH (or set a custom path in plugin settings).
-3. On first enable, the plugin downloads the bundled Mastra compiler backend (~180 MB, one time) from [GitHub Releases](https://github.com/mohammadmaso/echowiki/releases).
-4. Open **Settings → EchoWiki**, add your LLM and STT API keys, then use the commands below.
+2. Open **Settings → EchoWiki**, add your LLM and STT API keys, then use the commands below.
 
 EchoWiki creates `raw/` and `wiki/` folders in your vault automatically. You do **not** need to clone this repo unless you are developing EchoWiki itself.
 
@@ -19,7 +17,7 @@ EchoWiki creates `raw/` and `wiki/` folders in your vault automatically. You do 
 
 1. Bump `version` in root `manifest.json` and `obsidian-plugin/manifest.json` (keep them identical).
 2. Commit and push to `main`.
-3. Create and push a matching git tag (example: `0.1.0`). GitHub Actions builds `main.js`, `manifest.json`, `styles.css`, and `mastra-server.tar.gz`.
+3. Create and push a matching git tag (example: `0.1.0`). GitHub Actions builds `main.js`, `manifest.json`, and `styles.css`.
 4. Submit or update at [community.obsidian.md](https://community.obsidian.md) → **Plugins → New plugin** (first time only) with repo URL `https://github.com/mohammadmaso/echowiki`.
 
 ## Quick start (developer vault)
@@ -36,7 +34,7 @@ npm install
 npm run build:plugin
 ```
 
-This builds the Mastra server and the Obsidian plugin (`obsidian-plugin/main.js` + bundled `mastra-server/`).
+This builds the Obsidian plugin (`obsidian-plugin/main.js`), bundling the compiler and [Vercel AI SDK](https://sdk.vercel.ai/) in-process — no separate server process.
 
 ### 2. Open as an Obsidian vault
 
@@ -59,7 +57,6 @@ Symlink or copy the built plugin into Obsidian’s plugin directory:
 ```shell
 mkdir -p .obsidian/plugins/echowiki
 cp obsidian-plugin/manifest.json obsidian-plugin/styles.css obsidian-plugin/main.js .obsidian/plugins/echowiki/
-cp -R obsidian-plugin/mastra-server .obsidian/plugins/echowiki/
 ```
 
 Then in Obsidian:
@@ -67,7 +64,7 @@ Then in Obsidian:
 1. **Settings → Community plugins → Turn on community plugins**
 2. Enable **EchoWiki**
 
-The status bar should show `EchoWiki: ready :4111` when the embedded Mastra server is running.
+The status bar should show `EchoWiki: ready`.
 
 ### 4. Configure API keys
 
@@ -107,22 +104,20 @@ Open the **project root** as your Obsidian vault. It must contain sibling folder
 
 ## Obsidian plugin (recommended)
 
-The desktop plugin bundles and manages the Mastra server — you do **not** need to run `npm run dev` separately for day-to-day use.
+The desktop plugin runs compilation **in-process** via the Vercel AI SDK — you do **not** need Node.js on your PATH or a separate server.
 
 ### Requirements
 
 - Obsidian desktop (plugin sets `isDesktopOnly`)
-- Node.js **≥ 22.13** available on your PATH (or configure a custom path in settings)
 
 ### Build and install
 
 From the repo root:
 
 ```shell
-npm run build
+npm install
 cd obsidian-plugin
 npm install
-npm run build:mastra-server
 npm run build
 ```
 
@@ -132,8 +127,7 @@ Copy or symlink the plugin folder into your vault:
 <vault>/.obsidian/plugins/echowiki/
 ├── main.js
 ├── manifest.json
-├── styles.css
-└── mastra-server/    # bundled Mastra output (from build:mastra-server)
+└── styles.css
 ```
 
 Enable **EchoWiki** in Obsidian → Settings → Community plugins.
@@ -144,12 +138,12 @@ Configure in Obsidian → Settings → EchoWiki:
 
 | Setting | Purpose |
 |---------|---------|
-| LLM API key / model / base URL | Passed to the embedded Mastra server |
+| LLM API key / model / base URL | OpenAI-compatible chat endpoint for compilation |
 | STT base URL / API key / model | Voice transcription (`/audio/transcriptions`) |
 | Watch mode | Auto-detect new/changed files in `raw/` |
 | Require approval | Hold raw files in a pending queue until approved |
 
-The Mastra server starts automatically when the plugin loads. Status appears in the status bar (`EchoWiki: ready :4111`).
+Status appears in the status bar (`EchoWiki: ready` or `EchoWiki: compiling...`).
 
 ### Commands
 
@@ -160,22 +154,16 @@ The Mastra server starts automatically when the plugin loads. Status appears in 
 
 Ribbon: microphone icon opens the voice recorder.
 
-## Mastra development (optional)
+## CLI compilation (optional)
 
-For agent/workflow development and [Mastra Studio](https://mastra.ai/docs/studio/overview):
-
-```shell
-npm run dev
-```
-
-Open [http://localhost:4111](http://localhost:4111) to inspect agents, workflows, and traces.
-
-After changing `src/mastra` or `src/wiki`, rebuild the bundled server used by the plugin:
+For headless compilation from the terminal (Node.js ≥ 22.13):
 
 ```shell
-npm run build
-cd obsidian-plugin && npm run build:mastra-server
+export OPENAI_API_KEY=sk-...
+npm run compile -- raw/my-note.md
 ```
+
+Optional flags: `--kb-dir <vault-root>` (defaults to current directory).
 
 ## Manual test checklist
 
@@ -185,17 +173,13 @@ cd obsidian-plugin && npm run build:mastra-server
 4. **Approval:** With require approval on, compilation waits until you approve in *Review pending compilations*; with it off, compile runs immediately.
 5. **Obsidian graph:** Open graph view on `wiki/` and confirm new pages link via `[[wikilinks]]`.
 
-## Environment variables (Mastra server)
-
-When running via CLI (`npm run dev` / `npm run start`) or when spawned by the plugin:
+## Environment variables (CLI)
 
 | Variable | Purpose |
 |----------|---------|
 | `OPENAI_API_KEY` | LLM provider key |
-| `LLM_MODEL` | Model id (default `openai/gpt-5-mini`) |
+| `LLM_MODEL` | Model id (default `openai/gpt-5-mini`; provider prefix is stripped) |
 | `OPENAI_BASE_URL` | Optional OpenAI-compatible base URL |
-| `MASTRA_DB_PATH` | LibSQL database path (plugin stores this under its data folder) |
-| `PORT` | Server port (default `4111`) |
 
 See [`.env.example`](.env.example) for a minimal CLI setup.
 
@@ -203,15 +187,16 @@ See [`.env.example`](.env.example) for a minimal CLI setup.
 
 ```text
 src/
-├── mastra/           # Mastra agents, workflows, tools
-└── wiki/             # Compilation pipeline (summaries, concepts, entities)
-obsidian-plugin/      # Obsidian desktop plugin
+├── llm/              # Vercel AI SDK client
+├── wiki/             # Compilation pipeline (summaries, concepts, entities)
+└── compiler-api.ts   # Public compile entry point
+obsidian-plugin/      # Obsidian desktop plugin (bundles compiler in-process)
 raw/                  # Universal ingestion folder
 wiki/                 # Compiled Obsidian-compatible wiki output
 ```
 
 ## Learn more
 
-- [Mastra documentation](https://mastra.ai/docs/)
+- [Vercel AI SDK](https://sdk.vercel.ai/)
 - Product/tech context: [`.ai/01-PRD.md`](.ai/01-PRD.md), [`.ai/02-TECH-SPEC.md`](.ai/02-TECH-SPEC.md)
 - Task breakdown: [`.ai/03-TASKS.md`](.ai/03-TASKS.md)

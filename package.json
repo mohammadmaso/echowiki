@@ -5,10 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "mastra dev",
-    "build": "mastra build",
-    "start": "mastra start",
-    "build:plugin": "npm run build && cd obsidian-plugin && npm run build:mastra-server && npm run build"
+    "compile": "node --experimental-strip-types src/cli/compile.ts",
+    "build:plugin": "cd obsidian-plugin && npm run build"
   },
   "keywords": [],
   "author": "",
@@ -18,18 +16,11 @@
     "node": ">=22.13.0"
   },
   "dependencies": {
-    "@mastra/core": "^1.49.0",
-    "@mastra/duckdb": "^1.5.0",
-    "@mastra/evals": "^1.5.1",
-    "@mastra/libsql": "^1.15.0",
-    "@mastra/loggers": "^1.2.0",
-    "@mastra/memory": "^1.22.1",
-    "@mastra/observability": "^1.15.2",
-    "zod": "^4.4.3"
+    "@ai-sdk/openai": "^2.0.0",
+    "ai": "^5.0.0"
   },
   "devDependencies": {
     "@types/node": "^26.1.0",
-    "mastra": "^1.18.0",
     "typescript": "^6.0.3"
   }
 }
