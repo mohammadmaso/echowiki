@@ -102,13 +102,14 @@ Open the **project root** as your Obsidian vault. It must contain sibling folder
 └── wiki/         # compiled summaries, concepts, entities, index, log
 ```
 
-## Obsidian plugin (recommended)
+## Obsidian plugin (desktop & mobile)
 
-The desktop plugin runs compilation **in-process** via the Vercel AI SDK — you do **not** need Node.js on your PATH or a separate server.
+The plugin runs compilation **in-process** via the Vercel AI SDK — you do **not** need Node.js on your PATH or a separate server. It works on **Obsidian desktop and mobile** (iOS/Android).
 
 ### Requirements
 
-- Obsidian desktop (plugin sets `isDesktopOnly`)
+- Obsidian 1.5.0+ (desktop or mobile)
+- LLM and STT API keys configured in plugin settings (network required for compilation and voice transcription)
 
 ### Build and install
 
@@ -143,7 +144,7 @@ Configure in Obsidian → Settings → EchoWiki:
 | Watch mode | Auto-detect new/changed files in `raw/` |
 | Require approval | Hold raw files in a pending queue until approved |
 
-Status appears in the status bar (`EchoWiki: ready` or `EchoWiki: compiling...`).
+Status appears in the status bar on desktop (`EchoWiki: ready` or `EchoWiki: compiling...`). On mobile, use command palette notices during compilation.
 
 ### Commands
 
@@ -190,7 +191,7 @@ src/
 ├── llm/              # Vercel AI SDK client
 ├── wiki/             # Compilation pipeline (summaries, concepts, entities)
 └── compiler-api.ts   # Public compile entry point
-obsidian-plugin/      # Obsidian desktop plugin (bundles compiler in-process)
+obsidian-plugin/      # Obsidian plugin (desktop + mobile; bundles compiler in-process)
 raw/                  # Universal ingestion folder
 wiki/                 # Compiled Obsidian-compatible wiki output
 ```

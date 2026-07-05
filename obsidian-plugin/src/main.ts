@@ -1,5 +1,6 @@
 import {
   Notice,
+  Platform,
   Plugin,
   TFile,
   normalizePath,
@@ -41,7 +42,7 @@ export default class EchoWikiPlugin extends Plugin {
     await this.loadSettings();
     await this.ensureVaultFolders();
 
-    this.statusBarItem = this.addStatusBarItem();
+    this.statusBarItem = Platform.isMobileApp() ? null : this.addStatusBarItem();
     this.updateStatusBar('ready');
 
     this.rawWatcher = new RawWatcher(this.app, this);
@@ -174,18 +175,18 @@ export default class EchoWikiPlugin extends Plugin {
     new Notice(`Saved to ${targetPath}`);
   }
 
-  async saveVoiceTranscript(audio: Blob): Promise<void> {
+  async saveVoiceTranscript(audio: Blob, filename: string): Promise<void> {
     const slug = timestampSlug();
-    const wavPath = joinVaultPath(this.settings.rawFolder, `${slug}.wav`);
+    const audioPath = joinVaultPath(this.settings.rawFolder, `${slug}.${filename.split('.').pop() ?? 'webm'}`);
     const arrayBuffer = await audio.arrayBuffer();
-    await this.app.vault.createBinary(wavPath, arrayBuffer);
+    await this.app.vault.createBinary(audioPath, arrayBuffer);
 
     const transcript = await transcribeAudio(
       this.settings.sttBaseUrl,
       this.settings.sttApiKey,
       this.settings.sttModel,
       audio,
-      `${slug}.webm`,
+      filename,
     );
 
     const mdPath = joinVaultPath(this.settings.rawFolder, `${slug}.transcript.md`);

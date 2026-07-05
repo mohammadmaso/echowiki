@@ -46,3 +46,33 @@ export async function ensureFolder(vaultPath: string, adapter: { exists: (p: str
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+const AUDIO_MIME_CANDIDATES = [
+  'audio/webm;codecs=opus',
+  'audio/webm',
+  'audio/mp4',
+  'audio/aac',
+  'audio/mpeg',
+] as const;
+
+export function pickAudioMimeType(): string {
+  if (typeof MediaRecorder === 'undefined') {
+    return '';
+  }
+  for (const mime of AUDIO_MIME_CANDIDATES) {
+    if (MediaRecorder.isTypeSupported(mime)) {
+      return mime;
+    }
+  }
+  return '';
+}
+
+export function audioFilenameForMime(mimeType: string, slug: string): string {
+  if (mimeType.includes('mp4') || mimeType.includes('aac')) {
+    return `${slug}.m4a`;
+  }
+  if (mimeType.includes('mpeg')) {
+    return `${slug}.mp3`;
+  }
+  return `${slug}.webm`;
+}

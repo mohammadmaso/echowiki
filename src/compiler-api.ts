@@ -24,7 +24,10 @@ export async function compileDocument(
     ...options.config,
   });
 
-  const apiKey = options.llmApiKey?.trim() ?? process.env.OPENAI_API_KEY?.trim() ?? '';
+  const env =
+    typeof process !== 'undefined' && process.env ? process.env : ({} as NodeJS.ProcessEnv);
+
+  const apiKey = options.llmApiKey?.trim() ?? env.OPENAI_API_KEY?.trim() ?? '';
   if (!apiKey) {
     throw new Error('LLM API key is not set.');
   }
@@ -37,7 +40,7 @@ export async function compileDocument(
   const client = createLlmClient({
     model,
     apiKey,
-    baseUrl: options.llmBaseUrl?.trim() || process.env.OPENAI_BASE_URL?.trim() || undefined,
+    baseUrl: options.llmBaseUrl?.trim() || env.OPENAI_BASE_URL?.trim() || undefined,
   });
 
   await compileShortDoc(client, {

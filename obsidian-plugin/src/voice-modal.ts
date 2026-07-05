@@ -1,5 +1,6 @@
 import { App, Modal, Notice } from 'obsidian';
 import type EchoWikiPlugin from './main';
+import { audioFilenameForMime, pickAudioMimeType, timestampSlug } from './utils';
 
 export class VoiceModal extends Modal {
   private mediaRecorder: MediaRecorder | null = null;
@@ -11,6 +12,7 @@ export class VoiceModal extends Modal {
   private timerEl: HTMLElement | null = null;
   private recordButton: HTMLButtonElement | null = null;
   private stopButton: HTMLButtonElement | null = null;
+  private recordedMimeType = '';
 
   constructor(app: App, private plugin: EchoWikiPlugin) {
     super(app);
@@ -29,6 +31,12 @@ export class VoiceModal extends Modal {
     this.stopButton = controls.createEl('button', { text: 'Stop & transcribe' });
     this.stopButton.disabled = true;
 
+    if (typeof MediaRecorder === 'undefined') {
+      this.statusEl.setText('Voice recording is not supported on this device.');
+      this.recordButton.disabled = true;
+      return;
+    }
+
     this.recordButton.addEventListener('click', () => {
       void this.startRecording();
     });
@@ -44,9 +52,19 @@ export class VoiceModal extends Modal {
 
   private async startRecording(): Promise<void> {
     try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error('Microphone access is not available on this device.');
+      }
+
       this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       this.chunks = [];
-      this.mediaRecorder = new MediaRecorder(this.stream);
+      this.recordedMimeType = pickAudioMimeType();
+      this.mediaRecorder = this.recordedMimeType
+        ? new MediaRecorder(this.stream, { mimeType: this.recordedMimeType })
+        : new MediaRecorder(this.stream);
+      if (!this.recordedMimeType && this.mediaRecorder.mimeType) {
+        this.recordedMimeType = this.mediaRecorder.mimeType;
+      }
       this.mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           this.chunks.push(event.data);
@@ -84,9 +102,10 @@ export class VoiceModal extends Modal {
       this.stopButton.disabled = true;
     }
 
+    const mimeType = this.recordedMimeType || this.mediaRecorder.mimeType || 'audio/webm';
     const blob = await new Promise<Blob>((resolve) => {
       this.mediaRecorder!.onstop = () => {
-        resolve(new Blob(this.chunks, { type: 'audio/webm' }));
+        resolve(new Blob(this.chunks, { type: mimeType }));
       };
       this.mediaRecorder!.stop();
     });
@@ -94,7 +113,9 @@ export class VoiceModal extends Modal {
     await this.cleanup();
 
     try {
-      await this.plugin.saveVoiceTranscript(blob);
+      const slug = timestampSlug();
+      const filename = audioFilenameForMime(mimeType, slug);
+      await this.plugin.saveVoiceTranscript(blob, filename);
       new Notice('Voice note saved to raw/');
       this.close();
     } catch (error) {
